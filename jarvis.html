@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#050B14">
+<title>Jarvis</title>
+<style>
+:root {
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  --bg: #050B14; --ink: #DFF7FF; --muted: #7FA9BD; --accent: #5CE1FF;
+  --panel: rgba(12, 28, 44, 0.9); --line: rgba(92, 225, 255, 0.35); --bubble: rgba(92, 225, 255, 0.12);
+  color-scheme: dark;
+}
+body.light {
+  --bg: #EEF6FA; --ink: #0B2233; --muted: #4D6B7D; --accent: #0077A8;
+  --panel: rgba(255, 255, 255, 0.95); --line: rgba(0, 119, 168, 0.35); --bubble: rgba(0, 119, 168, 0.1);
+  color-scheme: light;
+}
+html, body { height: 100%; margin: 0; }
+body {
+  display: flex; flex-direction: column; overflow: hidden;
+  background: radial-gradient(120% 70% at 50% 0%, rgba(92, 225, 255, 0.14), transparent 60%), var(--bg);
+  color: var(--ink);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+button, input, textarea { font: inherit; }
+.mono { font-family: ui-monospace, Menlo, Consolas, monospace; }
+.top {
+  flex: none; display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 18px; border-bottom: 1px solid var(--line);
+}
+.name { color: var(--accent); font-size: 20px; letter-spacing: 0.2em; text-shadow: 0 0 12px rgba(92, 225, 255, 0.6); }
+.status { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; }
+.orb { width: 12px; height: 12px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 12px var(--accent); }
+.orb.busy { animation: pulse 1s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: 0.25; } }
+.log { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 14px; }
+.msg {
+  max-width: 85%; padding: 10px 14px; border-radius: 14px; border: 1px solid var(--line);
+  background: var(--bubble); font-size: 16px; line-height: 1.45; white-space: pre-wrap;
+}
+.msg.me { align-self: flex-end; background: var(--accent); border-color: transparent; color: #001722; }
+.go {
+  display: inline-block; margin-top: 8px; padding: 8px 12px; border-radius: 10px;
+  border: 1px solid var(--accent); color: var(--accent); font-weight: 600; text-decoration: none;
+}
+.chips { flex: none; display: flex; gap: 8px; overflow-x: auto; padding: 8px 14px; }
+.chip {
+  flex: none; padding: 7px 12px; border-radius: 999px; border: 1px solid var(--line);
+  background: var(--bubble); color: var(--ink); font-size: 14px; cursor: pointer;
+}
+.bar { flex: none; display: flex; align-items: center; gap: 8px; padding: 8px 12px 18px; }
+.bar input {
+  flex: 1; min-width: 0; padding: 12px 16px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--panel); color: var(--ink); font-size: 16px;
+}
+.bar button {
+  flex: none; width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--line);
+  background: var(--panel); color: var(--ink); font-size: 18px; cursor: pointer;
+}
+.bar button.on, .bar button[type="submit"] { background: var(--accent); color: #001722; border-color: transparent; }
+.bar button[hidden] { display: none; }
+.panel {
+  position: fixed; inset: 0; z-index: 5; display: none; flex-direction: column; gap: 12px;
+  padding: 18px; background: var(--bg);
+}
+.panel.open { display: flex; }
+.panel h2 {
+  flex: none; display: flex; justify-content: space-between; align-items: center; margin: 0;
+  color: var(--accent); font: 600 18px ui-monospace, Menlo, Consolas, monospace; letter-spacing: 0.15em;
+}
+.close { padding: 6px 12px; border-radius: 10px; border: 1px solid var(--line); background: none; color: var(--ink); cursor: pointer; }
+.panel textarea {
+  flex: 1; min-height: 0; width: 100%; box-sizing: border-box; padding: 14px; border-radius: 12px;
+  border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+  font-size: 17px; line-height: 1.5; resize: none;
+}
+.panel input {
+  flex: none; width: 100%; box-sizing: border-box; padding: 14px; border-radius: 12px;
+  border: 1px solid var(--line); background: var(--panel); color: var(--ink); font-size: 18px;
+}
+.big {
+  margin: auto; color: var(--accent); text-align: center;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: clamp(48px, 20vw, 110px); text-shadow: 0 0 18px rgba(92, 225, 255, 0.5);
+}
+@media (prefers-reduced-motion: reduce) { .orb.busy { animation: none; } }
+</style>
+</head>
+<body>
+<header class="top">
+  <span class="name mono">Jarvis</span>
+  <span class="status"><span class="orb" id="orb"></span><span id="status">Online</span><span id="clock" class="mono"></span></span>
+</header>
+<main class="log" id="log" role="log" aria-live="polite"></main>
+<nav class="chips" id="chips" aria-label="Quick commands"></nav>
+<form class="bar" id="form" autocomplete="off">
+  <button type="button" id="mic" aria-label="Speak a command" hidden>🎤</button>
+  <input id="cmd" type="text" placeholder="Try: open Instagram" aria-label="Command">
+  <button type="button" id="voice" class="on" aria-label="Spoken replies" aria-pressed="true" hidden>🔊</button>
+  <button type="submit" aria-label="Send">➤</button>
+</form>
+
+<section class="panel" id="p-notes" aria-label="Notes">
+  <h2>Notes <button class="close" data-close>Close</button></h2>
+  <textarea id="notes" placeholder="Your notes…"></textarea>
+</section>
+<section class="panel" id="p-timer" aria-label="Timer">
+  <h2>Timer <button class="close" data-close>Close</button></h2>
+  <div class="big" id="timer-out">0:00</div>
+</section>
+<section class="panel" id="p-calc" aria-label="Calculator">
+  <h2>Calculator <button class="close" data-close>Close</button></h2>
+  <input id="calc-in" type="text" placeholder="12 times 7 plus 3">
+  <div class="big" id="calc-out">0</div>
+</section>
+<section class="panel" id="p-clock" aria-label="Clock">
+  <h2>Clock <button class="close" data-close>Close</button></h2>
+  <div class="big" id="big-clock"></div>
+</section>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const log = $('log'), form = $('form'), cmd = $('cmd'), orb = $('orb'), statusEl = $('status');
+  const notesBox = $('notes'), calcIn = $('calc-in'), calcOut = $('calc-out'), timerOut = $('timer-out');
+  const voiceBtn = $('voice');
+
+  const PANELS = { notes: ['Notes', 'note', 'notepad'], timer: ['Timer'], calc: ['Calculator', 'calc'], clock: ['Clock'] };
+  const APPS = [
+    { name: 'Instagram', alias: ['insta'], pkg: 'com.instagram.android', url: 'https://www.instagram.com/' },
+    { name: 'TikTok', pkg: 'com.zhiliaoapp.musically', url: 'https://www.tiktok.com/' },
+    { name: 'YouTube', alias: ['yt'], pkg: 'com.google.android.youtube', url: 'https://www.youtube.com/' },
+    { name: 'Spotify', pkg: 'com.spotify.music', url: 'https://open.spotify.com/' },
+    { name: 'WhatsApp', pkg: 'com.whatsapp', url: 'https://web.whatsapp.com/' },
+    { name: 'Gmail', alias: ['email', 'mail'], pkg: 'com.google.android.gm', url: 'https://mail.google.com/' },
+    { name: 'Maps', alias: ['google maps'], pkg: 'com.google.android.apps.maps', url: 'https://maps.google.com/' },
+    { name: 'Chrome', alias: ['browser'], pkg: 'com.android.chrome', url: 'https://www.google.com/' },
+    { name: 'X', alias: ['twitter'], pkg: 'com.twitter.android', url: 'https://x.com/' },
+    { name: 'Facebook', pkg: 'com.facebook.katana', url: 'https://www.facebook.com/' },
+    { name: 'Netflix', pkg: 'com.netflix.mediaclient', url: 'https://www.netflix.com/' },
+    { name: 'Telegram', pkg: 'org.telegram.messenger', url: 'https://web.telegram.org/' },
+    { name: 'Play Store', alias: ['store'], pkg: 'com.android.vending', url: 'https://play.google.com/store' },
+    { name: 'Google', alias: ['google search'], pkg: 'com.google.android.googlequicksearchbox', url: 'https://www.google.com/' },
+    { name: 'Claude', pkg: 'com.anthropic.claude', url: 'https://claude.ai/' }
+  ];
+  const HELP = 'Try: open Instagram, open notes, timer 5 minutes, time, date, calc 12 times 7, note buy milk, dark mode, add app Reddit reddit.com, list apps, close.';
+  const SYSTEM = 'You are Jarvis, a concise phone assistant. Reply in one or two short sentences.';
+  const isAndroid = /Android/i.test(navigator.userAgent);
+  const canSpeak = 'speechSynthesis' in window;
+  let voiceOn = canSpeak;
+  const two = n => String(n).padStart(2, '0');
+  const hm = () => { const d = new Date(); return `${d.getHours() % 12 || 12}:${two(d.getMinutes())}`; };
+
+  // Panels
+  const panelEls = { notes: $('p-notes'), timer: $('p-timer'), calc: $('p-calc'), clock: $('p-clock') };
+  const closePanels = () => Object.values(panelEls).forEach(p => p.classList.remove('open'));
+  const openPanel = name => { closePanels(); panelEls[name].classList.add('open'); };
+  document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', closePanels));
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closePanels(); });
+
+  // Notes are kept on this device.
+  try { notesBox.value = localStorage.getItem('jarvis-notes') || ''; } catch (_) {}
+  notesBox.addEventListener('input', () => {
+    try { localStorage.setItem('jarvis-notes', notesBox.value); } catch (_) {}
+  });
+
+  // Clocks
+  const tick = () => {
+    const d = new Date();
+    $('clock').textContent = hm();
+    $('big-clock').textContent = `${hm()}:${two(d.getSeconds())}`;
+  };
+  tick();
+  setInterval(tick, 1000);
+
+  // Timer
+  let timerId = 0;
+  const startTimer = seconds => {
+    clearInterval(timerId);
+    const end = Date.now() + seconds * 1000;
+    const update = () => {
+      const left = Math.max(0, Math.ceil((end - Date.now()) / 1000));
+      timerOut.textContent = `${Math.floor(left / 60)}:${two(left % 60)}`;
+      if (left === 0) {
+        clearInterval(timerId);
+        if (navigator.vibrate) navigator.vibrate([300, 150, 300]);
+        say('Timer done.');
+      }
+    };
+    update();
+    timerId = setInterval(update, 250);
+  };
+
+  // Calculator: plain arithmetic only, checked before evaluation.
+  const toExpr = s => s.toLowerCase()
+    .replace(/×|\btimes\b|\bx\b/g, '*')
+    .replace(/÷|divided by|\bover\b/g, '/')
+    .replace(/\bplus\b/g, '+')
+    .replace(/\bminus\b/g, '-')
+    .replace(/\s+/g, '');
+  const evalExpr = s => {
+    const e = toExpr(s);
+    if (!e || !/^[\d+\-*\/().]+$/.test(e)) return null;
+    try {
+      const v = Function(`"use strict"; return (${e});`)();
+      return Number.isFinite(v) ? Number(v.toPrecision(12)) : NaN;
+    } catch (_) {
+      return NaN;
+    }
+  };
+  calcIn.addEventListener('input', () => {
+    const v = evalExpr(calcIn.value);
+    calcOut.textContent = v === null ? '0' : Number.isNaN(v) ? '—' : String(v);
+  });
+
+  // Chat output
+  const say = (text, link) => {
+    const p = document.createElement('div');
+    p.className = 'msg';
+    p.textContent = text;
+    if (link) {
+      const a = document.createElement('a');
+      a.className = 'go';
+      a.href = link.href;
+      a.textContent = link.label;
+      p.appendChild(a);
+    }
+    log.appendChild(p);
+    log.scrollTop = log.scrollHeight;
+    if (voiceOn) {
+      speechSynthesis.cancel();
+      speechSynthesis.speak(new SpeechSynthesisUtterance(text));
+    }
+  };
+  const me = text => {
+    const p = document.createElement('div');
+    p.className = 'msg me';
+    p.textContent = text;
+    log.appendChild(p);
+    log.scrollTop = log.scrollHeight;
+  };
+  const busy = (on, label = 'Thinking…') => {
+    orb.classList.toggle('busy', on);
+    statusEl.textContent = on ? label : 'Online';
+  };
+  const setVoice = on => {
+    voiceOn = on;
+    voiceBtn.classList.toggle('on', on);
+    voiceBtn.setAttribute('aria-pressed', String(on));
+    if (!on) speechSynthesis.cancel();
+  };
+  if (canSpeak) {
+    voiceBtn.hidden = false;
+    voiceBtn.addEventListener('click', () => setVoice(!voiceOn));
+  }
+
+  // Installed apps open through Android intent links. Without a package name, Chrome picks the app that handles the site.
+  const customApps = () => {
+    try { return JSON.parse(localStorage.getItem('jarvis-apps') || '[]'); } catch (_) { return []; }
+  };
+  const allApps = () => [...APPS, ...customApps()];
+  const intentFor = (url, pkg) => `intent://${url.replace(/^https?:\/\//, '')}#Intent;scheme=https;${pkg ? `package=${pkg};` : ''}S.browser_fallback_url=${encodeURIComponent(url)};end`;
+  // Typed commands count as a tap, so Android opens the app straight away. Voice input may not, so the button stays as a fallback.
+  const launch = (name, url, pkg) => {
+    const href = isAndroid ? intentFor(url, pkg) : url;
+    say(`Opening ${name}. If nothing happens, tap below.`, { href, label: `Open ${name}` });
+    if (isAndroid) location.href = href;
+  };
+  const tryOpen = q => {
+    const key = q.toLowerCase().trim();
+    const panel = Object.keys(PANELS).find(k => PANELS[k].some(w => w.toLowerCase() === key));
+    if (panel) {
+      openPanel(panel);
+      say(`Opening ${PANELS[panel][0]}.`);
+      return true;
+    }
+    const app = allApps().find(a => a.name.toLowerCase() === key || (a.alias || []).includes(key));
+    if (app) {
+      launch(app.name, app.url, app.pkg);
+      return true;
+    }
+    if (/^[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}(\/\S*)?$/.test(key)) {
+      launch(key, `https://${key}`);
+      return true;
+    }
+    return false;
+  };
+
+  const askClaude = async text => {
+    busy(true);
+    try {
+      const sample = await window.claude.use('sample');
+      if (!sample) throw new Error('unavailable');
+      const res = await sample(`${SYSTEM}\n\nUser: ${text}`, { cache: false, modelTier: 'quick' });
+      say((res.text || '').trim() || 'Done.');
+    } catch (_) {
+      say('Claude isn’t available right now. I can still open apps, notes, timers, and calculations.');
+    } finally {
+      busy(false);
+    }
+  };
+
+  const handle = raw => {
+    const text = raw.trim();
+    const t = text.toLowerCase().replace(/[.!?]+$/, '');
+    if (!t) return;
+    let m;
+    if (/^(help|commands|what can you do)$/.test(t)) return say(HELP);
+    if (/^(hi|hello|hey)\b/.test(t)) return say('Hello. What do you need?');
+    if (/^(close|go home|home|back|close (it|that))$/.test(t)) {
+      closePanels();
+      return say('Back on the home screen.');
+    }
+    if (/^(list apps|apps|what can you open)$/.test(t)) {
+      return say('I can open: ' + [...Object.values(PANELS).map(v => v[0]), ...allApps().map(a => a.name)].join(', ') + '.');
+    }
+    if (/^clear( chat)?$/.test(t)) {
+      log.innerHTML = '';
+      return say('Cleared.');
+    }
+    if (canSpeak && /^speak (on|off)$/.test(t)) {
+      setVoice(t.endsWith('on'));
+      return say(`Spoken replies ${voiceOn ? 'on' : 'off'}.`);
+    }
+    if (/\bdark mode\b/.test(t)) {
+      document.body.classList.remove('light');
+      return say('Dark mode on.');
+    }
+    if (/\blight mode\b/.test(t)) {
+      document.body.classList.add('light');
+      return say('Light mode on.');
+    }
+    if (/\bdate\b|what day/.test(t)) {
+      return say(new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' }) + '.');
+    }
+    if (/\btime\b/.test(t)) return say(`It’s ${hm()}.`);
+    if ((m = t.match(/timer(?:\s+for)?\s+(\d+)\s*(seconds?|secs?|minutes?|mins?|hours?)/))) {
+      const n = Number(m[1]);
+      const unit = m[2][0];
+      const seconds = unit === 's' ? n : unit === 'm' ? n * 60 : n * 3600;
+      startTimer(seconds);
+      openPanel('timer');
+      return say(`Timer set for ${n} ${m[2]}.`);
+    }
+    if ((m = t.match(/^(?:calc|calculate|what is|what['’]s|whats)\s+(.+)$/))) {
+      const v = evalExpr(m[1]);
+      if (v !== null && !Number.isNaN(v)) {
+        calcIn.value = m[1];
+        calcOut.textContent = String(v);
+        openPanel('calc');
+        return say(`${m[1]} equals ${v}.`);
+      }
+    }
+    if ((m = text.match(/^add app\s+(.+?)\s+(?:at\s+|to\s+)?(\S+\.\S+)$/i))) {
+      const name = m[1].trim();
+      const url = /^https?:\/\//i.test(m[2]) ? m[2] : `https://${m[2]}`;
+      const list = customApps().filter(a => a.name.toLowerCase() !== name.toLowerCase());
+      list.push({ name, url });
+      try { localStorage.setItem('jarvis-apps', JSON.stringify(list)); } catch (_) {}
+      return say(`Added ${name}. Say “open ${name}” to launch it.`);
+    }
+    if ((m = text.match(/^(?:note|remember|write down)[:\s]+(.+)$/i))) {
+      notesBox.value = (notesBox.value ? notesBox.value + '\n' : '') + m[1];
+      notesBox.dispatchEvent(new Event('input'));
+      openPanel('notes');
+      return say('Added to your notes.');
+    }
+    if ((m = t.match(/^(?:open|launch|start|show|go to)\s+(.+)$/))) {
+      const target = m[1].replace(/^the\s+/, '');
+      return tryOpen(target) ? undefined : say('I don’t know that app. Say “list apps” to see what I can open.');
+    }
+    if (tryOpen(t)) return;
+    if (window.claude) return askClaude(text);
+    say('I didn’t catch that. Say “help” to see what I can do.');
+  };
+
+  const submit = text => {
+    const t = text.trim();
+    if (!t) return;
+    me(t);
+    handle(t);
+  };
+  form.addEventListener('submit', e => {
+    e.preventDefault();
+    const value = cmd.value;
+    cmd.value = '';
+    submit(value);
+  });
+  $('chips').innerHTML = ['Time', 'Date', 'Notes', 'Timer 5 minutes', 'Calculator', 'List apps', 'Help']
+    .map(c => `<button class="chip" type="button">${c}</button>`).join('');
+  $('chips').addEventListener('click', e => {
+    const chip = e.target.closest('.chip');
+    if (chip) submit(chip.textContent);
+  });
+
+  // Voice input where the browser allows it.
+  const Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (Rec) {
+    const rec = new Rec();
+    rec.lang = 'en-US';
+    rec.interimResults = false;
+    rec.onstart = () => busy(true, 'Listening…');
+    rec.onend = () => busy(false);
+    rec.onresult = e => submit(e.results[0][0].transcript);
+    rec.onerror = e => say(e.error === 'not-allowed'
+      ? 'The microphone is blocked here. You can type instead.'
+      : 'I didn’t hear that. Try again.');
+    $('mic').hidden = false;
+    $('mic').addEventListener('click', () => { try { rec.start(); } catch (_) {} });
+  }
+
+  say('Jarvis online. Say “help” to see what I can do.');
+})();
+</script>
+</body>
+</html>
